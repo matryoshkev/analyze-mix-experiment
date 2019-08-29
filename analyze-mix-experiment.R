@@ -1,50 +1,70 @@
-# analyze-mix-experiments.R v0.3
-# jeff smith & Fredrick R. Inglis, 2015-2016
+# analyze-mix-experiment.R v0.4
+# Script for use with the R software environment for statistical computing
+# jeff smith and R. Fredrick Inglis 2019
 
-# TO DO LIST: 
+# TO DO: 
 # 
-# - Make 10^0 labels "1"
-# - Extend limits to nearest major tick?  (If < half segment needed)
-# - More space between top and bottom rows?
-# - BUG: Sometimes wierd shit happening with first plot.  
-#        Has to do with dev.new() being called in block, I think. 
+# Open questions
+# - should output include calculated initial and final states?
+# - should plots include zero/Inf data? 
 # 
-# - Stop script execution if warning("Cannot determine final strain abundances from data")
-# - Annotate results.txt: explain Wrightian fitness
-# - HOW TO: Explain how script keeps "extra columns"
-# - "Number" vs "density:" what do?
+# Plots
+# - labels every 3 logs when necessary (esp within) ex: 
+# - breaks = 10^seq(-6, 6, by = 2)
+# - breaks = 10^seq(-3, 3, by = 1)
+# - breaks = c(0.05, 0.1, 0.5, 1, 5, 10, 50)
+# - breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)
+# - axis limits: extend to nearest 10-fold? (initial.ratio, fitness, fitness.ratio)
+# - make.linear.labels on fitness scale 
+# - easily-modified variables for point colors
+# - larger points when multiple zero counts? 
 # 
-
+# Error warnings: 
+# - negative abundance
+# - number.X > number.total
+# - initial or final proportion not in [0, 1]
+# - zeroes/Inf in outcomes
+# - more than one strain.A or more than one strain.B
+# - stop script execution if warning?
+# 
+# Calculations
+# - format numbers for results-fitness.txt, not formatC()
+# 
+# Code cleanup and streamlining:
+# - revise description and instructions
+# - revise output annotation: script version number? more description? 
+# - include license (GPL-- GNU General Public License?)
+# 
 
 # 
 # WHAT THIS SCRIPT DOES
 # 
-# This script takes data from microbial "mix experiments", calculates a variety of fitness 
+# This script takes data from microbial "mix experiments", calculates some recommended fitness 
 # measures, and plots them against the initial abundance of each strain in the mixture.  
-# For more details, see [full reference here]. 
+# For more details, see smith & Inglis [ref here] 
 # 
 # 
 # HOW TO USE THIS SCRIPT
 # 
-# 1. Obtain a copy of the R free software environment for statistical computing and 
-#    graphics (http://www.r-project.org/)
-# 2. If you don't have the ggplot2 and gtable packages, run this command in R: 
+# 1. Obtain a copy of the R free software environment for statistical computing
+#    from https://www.r-project.org/
+# 2. If you don't already have the ggplot2 or gtable package, run this command in R: 
 #    install.packages(c("ggplot2", "gtable"))
 # 3. Format your data to match the script's expected input (described below)
 # 4. Change the filename here to your data: 
-# 
-     # data.filename <- "example-data.txt"
-     data.filename <- "data-Fiegna-2006-OC-PX.txt"
-# 
-# 5. Run the script in R by selecting "Edit/Source Document" from the top menu (cmd-E in OS X) 
-# 
+
+	data.filename <- "data-tmp.txt"
+
+# 5. Run the script in R by selecting "Edit/Source Document" from the top menu (cmd-E in macOS) 
+# 6. Calculated fitness measures will be output to the file "results-fitness.txt". 
+#    Fitness plots will be output to files "results-plot1.pdf" and "results-plot2.pdf"
 # 
 # 
 # EXPECTED DATA FORMAT
 # 
-# The script expects data to be a tab-delimited text file containing a table with a header 
-# row. An easy way to generate such a file is to copy and paste cells from MS Excel into a 
-# text editor like NotePad or TextEdit. 
+# The script expects data to be a tab-delimited text file containing a table with a header row. 
+# An easy way to generate such a file is to copy and paste cells from MS Excel into a text 
+# editor like NotePad or TextEdit. 
 # 
 # Every row must include columns named "strain.A" and "strain.B" that include the names 
 # of the two strains in the mix experiment. Strain A is assumed to be the primary strain of 
@@ -53,9 +73,10 @@
 # The data table must also include columns with sufficient data to identify the initial and 
 # final abundance af each strain. The possible columns are: 
 # 
-# 	initial.number.A, initial.number.B, final.number.A, final.number.B, 
-# 	initial.number.total, initial.proportion.A, initial.proportion.B, 
-# 	final.number.total, final.proportion.A, and final.proportion.B
+#  initial.number.A, initial.number.B, initial.number.total, 
+#  initial.proportion.A, initial.proportion.B, 
+#  final.number.A, final.number.B, final.number.total, 
+#  final.proportion.A, final.proportion.B
 # 
 # The data table need not include all of these columns, but it must include two initial and 
 # two final quantities from which the rest can be calculated. Ideally, you'd include whatever 
@@ -67,365 +88,343 @@
 # assumes that each row is data from an independent biological replicate, so any repeated 
 # measurements from the same replicate must but dealt with (averaged) beforehand. 
 # 
-# For example, a simple data set might look like this: 
+# For example, a simple dataset might look like this: 
 # 
-#   strain.A	strain.B	initial.number.A	initial.number.B	final.number.A	final.number.B
-#   GVB206.3	GJV10	5.00E+08	0.00E+00	6.00E+01	0.00E+00
-#   GVB206.3	GJV10	2.50E+08	2.50E+08	1.07E+05	3.90E+05
-#   GVB206.3	GJV10	0.00E+00	5.00E+08	0.00E+00	1.76E+07
+#  # You can include metadata and other comments like this
+#  # strain descriptions, experimental treatments, author, date, etc.
+#  # 
+#  strain.A	strain.B	initial.number.A	initial.number.B	final.number.A	final.number.B
+#  GVB206.3	GJV10	5.00E+08	0.00E+00	6.00E+01	0.00E+00
+#  GVB206.3	GJV10	2.50E+08	2.50E+08	1.07E+05	3.90E+05
+#  GVB206.3	GJV10	0.00E+00	5.00E+08	0.00E+00	1.76E+07
 # 
-# 
-# 
-# LICENSE
-# 
-# This work is licensed under a Creative Commons Attribution 4.0 International License
-# (https://creativecommons.org/licenses/by/4.0/). 
-# 
-# If you use this script (or derivatives of this script), please cite: 
-# [full reference here]
-# 
-
 
 # =================================================
-# You don't need to change anything below this line
+# YOU DON'T NEED TO CHANGE ANYTHING BELOW THIS LINE
 # =================================================
 
-## 
-## LOAD PACKAGES AND DATA
-## 
+# Tested with R version 3.6.1 (2019-07-05)
+library("ggplot2")  # For plots, tested with version 3.2.1
+library("gtable")   # For multiple plots in one window, tested with version 0.3.0
 
-library("ggplot2")  # for graphics, tested with v2.0.0
-library("gtable")   # for multiple plots in single window, tested with v0.1.2
-# library("scales")    # for better log-scale tick labels, tested with v0.2.4
-# Script tested with R v3.2.3
+analyze.mix.expt <- function(input.filename) {
+	# Wrapping everything in a function to keep namespace and memory clean
 
-my.data <- read.table(data.filename, header = TRUE, sep = "\t", as.is = TRUE)
+	# Load data
+	dataset <- read.table(input.filename, header = TRUE, sep = "\t", as.is = TRUE)
+	dataset.tmp <- dataset  # Copy for calculations
 
+	# 
+	# Calculate fitness
+	# 
 
-## 
-## FORMAT DATA AND CALCULATE FITNESS MEASURES
-## 
+	dataset.tmp <- within(dataset.tmp, {
+	
+		# Calculate initial population state
+		if (exists("initial.number.A") & exists("initial.number.B")) {
+			initial.number.total <- initial.number.A + initial.number.B
+			initial.proportion.A <- initial.number.A / initial.number.total
+			initial.proportion.B <- initial.number.B / initial.number.total
+			initial.ratio.A      <- initial.number.A / initial.number.B
+		} else if (exists("initial.number.total") & exists("initial.proportion.A")) {
+			initial.proportion.B <- 1 - initial.proportion.A
+			initial.number.A     <- initial.number.total * initial.proportion.A
+			initial.number.B     <- initial.number.total * initial.proportion.B
+			initial.ratio.A      <- initial.number.A / initial.number.B
+		} else if (exists("initial.number.total") & exists("initial.proportion.B")) {
+			initial.proportion.A <- 1 - initial.proportion.B
+			initial.number.A     <- initial.number.total * initial.proportion.A
+			initial.number.B     <- initial.number.total * initial.proportion.B
+			initial.ratio.A      <- initial.number.A / initial.number.B
+		} else if (exists("initial.number.total") & exists("initial.number.A")) {
+			initial.number.B     <- initial.number.total - initial.number.A
+			initial.proportion.A <- initial.number.A / initial.number.total
+			initial.proportion.B <- initial.number.B / initial.number.total
+			initial.ratio.A      <- initial.number.A / initial.number.B
+		} else if (exists("initial.number.total") & exists("initial.number.B")) {
+			initial.number.A     <- initial.number.total - initial.number.B
+			initial.proportion.A <- initial.number.A / initial.number.total
+			initial.proportion.B <- initial.number.B / initial.number.total
+			initial.ratio.A      <- initial.number.A / initial.number.B
+		} else {
+			warning("Cannot determine initial population state from data")
+		}
 
-# Extract names of strains in experiment
-name.strain.A <- unique(my.data$strain.A)[1]
-name.strain.B <- unique(my.data$strain.B)[1]
+		# Calculate final population state
+		if (exists("final.number.A") & exists("final.number.B")) {
+			final.number.total <- final.number.A + final.number.B
+			final.proportion.A <- final.number.A / final.number.total
+			final.proportion.B <- final.number.B / final.number.total
+		} else if (exists("final.number.total") & exists("final.proportion.A")) {
+			final.proportion.B <- 1 - final.proportion.A
+			final.number.A     <- final.number.total * final.proportion.A
+			final.number.B     <- final.number.total * final.proportion.B
+		} else if (exists("final.number.total") & exists("final.proportion.B")) {
+			final.proportion.A <- 1 - final.proportion.B
+			final.number.A     <- final.number.total * final.proportion.A
+			final.number.B     <- final.number.total * final.proportion.B
+		} else if (exists("final.number.total") & exists("final.number.A")) {
+			final.number.B     <- final.number.total - final.number.A
+			final.proportion.A <- final.number.A / final.number.total
+			final.proportion.B <- final.number.B / final.number.total
+		} else if (exists("final.number.total") & exists("final.number.B")) {
+			final.number.A     <- final.number.total - final.number.B
+			final.proportion.A <- final.number.A / final.number.total
+			final.proportion.B <- final.number.B / final.number.total
+		} else {
+			warning("Cannot determine final population state from data")
+		}
 
-# Calculate initial strain abundances from what's given
-my.data <- within(my.data, {
-	if (exists("initial.number.A") & exists("initial.number.B")) {
-		initial.number.total <- initial.number.A + initial.number.B
-		initial.proportion.A <- initial.number.A / initial.number.total
-		initial.proportion.B <- initial.number.B / initial.number.total
-		initial.ratio.A      <- initial.number.A / initial.number.B
-	} else if (exists("initial.number.total") & exists("initial.proportion.A")) {
-		initial.proportion.B <- 1 - initial.proportion.A
-		initial.number.A     <- initial.number.total * initial.proportion.A
-		initial.number.B     <- initial.number.total * initial.proportion.B
-		initial.ratio.A      <- initial.number.A / initial.number.B
-	} else if (exists("initial.number.total") & exists("initial.proportion.B")) {
-		initial.proportion.A <- 1 - initial.proportion.B
-		initial.number.A     <- initial.number.total * initial.proportion.A
-		initial.number.B     <- initial.number.total * initial.proportion.B
-		initial.ratio.A      <- initial.number.A / initial.number.B
-	} else if (exists("initial.number.total") & exists("initial.number.A")) {
-		initial.number.B     <- initial.number.total - initial.number.A
-		initial.proportion.A <- initial.number.A / initial.number.total
-		initial.proportion.B <- initial.number.B / initial.number.total
-		initial.ratio.A      <- initial.number.A / initial.number.B
-	} else if (exists("initial.number.total") & exists("initial.number.B")) {
-		initial.number.A     <- initial.number.total - initial.number.B
-		initial.proportion.A <- initial.number.A / initial.number.total
-		initial.proportion.B <- initial.number.B / initial.number.total
-		initial.ratio.A      <- initial.number.A / initial.number.B
-	} else {
-		warning("Cannot determine initial strain abundances from data")
-	}
-})
+		# Calculate fitness measures
+		fitness.A       <- final.number.A / initial.number.A
+		fitness.B       <- final.number.B / initial.number.B
+		fitness.total   <- final.number.total / initial.number.total
+		fitness.ratio.A <- fitness.A / fitness.B
 
-# Remove Inf/0 values from initial ratio 
-# my.data$initial.ratio.A[is.infinite(my.data$initial.ratio.A)] <- NA
-# my.data$initial.ratio.A[my.data$initial.ratio.A == 0]         <- NA
+		# Format results (scientific notation)
+		# initial.ratio.A <- formatC(initial.ratio.A, format = "e", digits = 6)
+		# fitness.A       <- formatC(fitness.A, format = "e", digits = 6)
+		# fitness.B       <- formatC(fitness.B, format = "e", digits = 6)
+		# fitness.total   <- formatC(fitness.total, format = "e", digits = 6)
+		# fitness.ratio.A <- formatC(fitness.ratio.A, format = "e", digits = 6)
 
-# Calculate final strain abundances from what's given
-my.data <- within(my.data, {
-	if (exists("final.number.A") & exists("final.number.B")) {
-		final.number.total <- final.number.A + final.number.B
-		final.proportion.A <- final.number.A / final.number.total
-		final.proportion.B <- final.number.B / final.number.total
-	} else if (exists("final.number.total") & exists("final.proportion.A")) {
-		final.proportion.B <- 1 - final.proportion.A
-		final.number.A     <- final.number.total * final.proportion.A
-		final.number.B     <- final.number.total * final.proportion.B
-	} else if (exists("final.number.total") & exists("final.proportion.B")) {
-		final.proportion.A <- 1 - final.proportion.B
-		final.number.A     <- final.number.total * final.proportion.A
-		final.number.B     <- final.number.total * final.proportion.B
-	} else if (exists("final.number.total") & exists("final.number.A")) {
-		final.number.B     <- final.number.total - final.number.A
-		final.proportion.A <- final.number.A / final.number.total
-		final.proportion.B <- final.number.B / final.number.total
-	} else if (exists("final.number.total") & exists("final.number.B")) {
-		final.number.A     <- final.number.total - final.number.B
-		final.proportion.A <- final.number.A / final.number.total
-		final.proportion.B <- final.number.B / final.number.total
-	} else {
-		warning("Cannot determine final strain abundances from data")
-	}
-})
+		# NA results for single-strain populations
+		fitness.A[initial.number.A == 0] <- NA
+		fitness.B[initial.number.B == 0] <- NA
+		fitness.ratio.A[(initial.number.A == 0) | (initial.number.B == 0)] <- NA
 
-# Calculate fitness measures
-my.data <- within(my.data, {
-	fitness.A       <- final.number.A / initial.number.A
-	fitness.B       <- final.number.B / initial.number.B
-	fitness.total   <- final.number.total / initial.number.total
-	fitness.ratio.A <- fitness.A / fitness.B
-	fitness.ratio.B <- fitness.B / fitness.A
-	# initial.ratio.1p <- (initial.number.A + 1) / (initial.number.B + 1)
-})
+	})
 
-# Remove Inf/0 values from fitness ratio 
-my.data$fitness.ratio.A[is.infinite(my.data$fitness.ratio.A)] <- NA
-my.data$fitness.ratio.B[is.infinite(my.data$fitness.ratio.B)] <- NA
-my.data$fitness.ratio.A[my.data$fitness.ratio.A == 0]         <- NA
-my.data$fitness.ratio.B[my.data$fitness.ratio.B == 0]         <- NA
-my.data$fitness.ratio.A[is.nan(my.data$fitness.ratio.A)]      <- NA
-my.data$fitness.ratio.B[is.nan(my.data$fitness.ratio.B)]      <- NA
+	# Add results to input data frame
+	dataset$initial.proportion.A <- dataset.tmp$initial.proportion.A
+	dataset$initial.ratio.A      <- dataset.tmp$initial.ratio.A
+	dataset$fitness.A       <- dataset.tmp$fitness.A
+	dataset$fitness.B       <- dataset.tmp$fitness.B
+	dataset$fitness.total   <- dataset.tmp$fitness.total
+	dataset$fitness.ratio.A <- dataset.tmp$fitness.ratio.A
 
-# head(my.data)
-
-# Write calculated fitness measures to file
-my.connection <- file("results.txt", open = "wt")
-writeLines(paste("# Test annotation"), my.connection)
-writeLines(paste("#", data.filename), my.connection)
-writeLines(paste("#", Sys.time()), my.connection)
-suppressWarnings(write.table(
-	my.data, my.connection, 
-	quote = FALSE, sep = "\t", row.names = FALSE, append = TRUE
-))
-close(my.connection)
-
-# Make long-form data frame for plotting with color scale for strain
-tmp.data.A <- subset(my.data, select = c(
-	strain.A, 
-	initial.number.A, final.number.A, fitness.A, 
-	initial.proportion.A, initial.ratio.A 
-	#, initial.ratio.1p
-))
-tmp.data.B <- subset(my.data, select = c(
-	strain.B, 
-	initial.number.B, final.number.B, fitness.B, 
-	initial.proportion.A, initial.ratio.A
-	# , initial.ratio.1p
-))
-tmp.data.total <- subset(my.data, select = c(
-	strain.A, 
-	initial.number.total, final.number.total, fitness.total, 
-	initial.proportion.A, initial.ratio.A
-	# , initial.ratio.1p
-))
-colnames(tmp.data.A) <- c(
-	"strain", "initial.number", "final.number", "fitness", 
-	"initial.proportion.A", "initial.ratio.A"
-	# , "initial.ratio.1p"
-)
-colnames(tmp.data.B)     <- colnames(tmp.data.A)
-colnames(tmp.data.total) <- colnames(tmp.data.A)
-tmp.data.total$strain    <- rep("Total group", nrow(tmp.data.total))
-my.data.long <- rbind(tmp.data.A, tmp.data.B, tmp.data.total)
-my.data.long <- subset(my.data.long, (initial.number > 0) & !(is.na(final.number)) )
-my.data.long$strain <- factor(my.data.long$strain, levels = c(name.strain.A, name.strain.B, "Total group"))
-
-# head(my.data.long); tail(my.data.long)
-
-
-##
-## DETERMINE BEST SCALES FOR PLOTS
-##
-
-# Fitness y-axis
-
-fitness.limits <- range(
-	1, 
-	my.data.long$fitness[my.data.long$fitness > 0], # Includes total group
-	na.rm = TRUE
-)
-fitness.range.log10 <- log10(fitness.limits[2]/fitness.limits[1])
-
-if ( fitness.range.log10 < 1 ) {	
-	# Minimum 10-fold range
-	fitness.midpoint    <- log10(fitness.limits[1]) + fitness.range.log10/2
-	fitness.limits[1]   <- 10^(fitness.midpoint - 0.5)
-	fitness.limits[2]   <- 10^(fitness.midpoint + 0.5)
-	fitness.range.log10 <- 1
-}
-
-if (fitness.range.log10 > 4) {
-	fitness.breaks       <- 10^seq(-16, 16, by = 2)
-	fitness.breaks.minor <- 10^seq(-16, 16, by = 1)
-	fitness.labels       <- sapply(
-		fitness.breaks, function(i) as.expression(bquote( 10^ .(log10(i)) ))
+	# Write results to file
+	my.connection <- file("results-fitness.txt", open = "wt")
+	writeLines(
+		c(
+			"# Calculated fitness values for microbial mix experiment", 
+			paste("# Created:", Sys.time(), "by analyze-mix-experiment.R"), 
+			paste("# Input data:", input.filename), 
+			"# ", 
+			"# Wrightian fitness w = final.number / initial.number", 
+			"# Fitness ratio = w_A / w_B", 
+			"# "
+		), my.connection
 	)
-} else if (fitness.range.log10 > 1.5) {
-	fitness.breaks       <- 10^c(-5:5)
-	fitness.breaks.minor <- 0.5 * 10^c(-5:5)
-	fitness.labels       <- sapply(
-		fitness.breaks, function(i) as.expression(bquote( 10^ .(log10(i)) ))
+	suppressWarnings(write.table(
+		dataset, my.connection, quote = FALSE, sep = "\t", row.names = FALSE, append = TRUE
+	))
+	close(my.connection)
+
+	# 
+	# Make plots
+	# 
+
+	# Format data for plotting
+	name.strain.A <- unique(dataset$strain.A)[1]
+	name.strain.B <- unique(dataset$strain.B)[1]
+	data.for.plot.long <- reshape(
+		subset(dataset, select = c(
+			initial.proportion.A, initial.ratio.A, fitness.A, fitness.B, fitness.total
+		)), 
+		direction = "long", 
+		varying = c("fitness.A", "fitness.B", "fitness.total"), v.names = c("fitness"), 
+		times = c(name.strain.A, name.strain.B, "Total group"), timevar = "strain"
 	)
-} else {
-	fitness.breaks       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
-	fitness.breaks.minor <- c(0.1 * 1:9, 1:9)
-	fitness.labels       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
+	data.for.plot.long <- within(data.for.plot.long, {
+		strain <- factor(strain, levels = c(name.strain.A, name.strain.B, "Total group"))
+		my.facet <- (strain == "Total group")
+	})
+	data.for.plot.long <- subset(data.for.plot.long, !is.na(fitness))
+	data.for.plot.wide <- subset(dataset, !is.na(fitness.ratio.A), 
+		select = c(initial.proportion.A, initial.ratio.A, fitness.ratio.A)
+	)
+
+	# Define fitness axis limits
+	limits.fitness <- with(data.for.plot.long, 
+		range(1, fitness[fitness > 0], na.rm = TRUE)
+	)
+	limits.fitness.ratio <- with(data.for.plot.wide, 
+		range(1, fitness.ratio.A[(fitness.ratio.A > 0) & is.finite(fitness.ratio.A)], na.rm = TRUE)
+	)
+	range.fitness       <- log10(limits.fitness[2]/limits.fitness[1])
+	range.fitness.ratio <- log10(limits.fitness.ratio[2]/limits.fitness.ratio[1])
+
+	# Minimum 10-fold fitness range
+	if (range.fitness < 1) {
+		limits.fitness <- c(
+			10^(log10(limits.fitness[1]) - (1 - range.fitness)/2), 
+			10^(log10(limits.fitness[2]) + (1 - range.fitness)/2)
+		)
+		range.fitness <- log10(limits.fitness[2]/limits.fitness[1])
+	}
+	if (range.fitness.ratio < 1) {
+		limits.fitness.ratio <- c(
+			10^(log10(limits.fitness.ratio[1]) - (1 - range.fitness.ratio)/2), 
+			10^(log10(limits.fitness.ratio[2]) + (1 - range.fitness.ratio)/2)
+		)
+		range.fitness.ratio <- log10(limits.fitness.ratio[2]/limits.fitness.ratio[1])
+	}
+
+	# Shared fitness scale
+	if (range.fitness > range.fitness.ratio) {
+		limits.fitness.ratio <- c(
+			10^(log10(limits.fitness.ratio[1]) - (range.fitness - range.fitness.ratio)/2), 
+			10^(log10(limits.fitness.ratio[2]) + (range.fitness - range.fitness.ratio)/2) 
+		)
+		range.fitness.ratio <- log10(limits.fitness.ratio[2]/limits.fitness.ratio[1])
+	} else if (range.fitness.ratio > range.fitness) {
+		limits.fitness<- c(
+			10^(log10(limits.fitness[1]) - (range.fitness.ratio - range.fitness)/2), 
+			10^(log10(limits.fitness[2]) + (range.fitness.ratio - range.fitness)/2) 
+		)
+		range.fitness <- log10(limits.fitness[2]/limits.fitness[1])
+	}
+	# print(c(log10(limits.fitness), range.fitness))
+	# print(c(log10(limits.fitness.ratio), range.fitness.ratio))
+
+	# Define fitness breaks and labels
+	make.log.labels <- function(x) {
+		if (x == 1) { 
+			as.expression(1) 
+		} else {
+			as.expression(bquote(10^.(log10(x))))
+		}
+	}
+	make.linear.labels <- function(x) {
+		if (x == 1) { 
+			as.expression(1) 
+		} else if (x == 0) { 
+			as.expression(0)
+		} else { 
+			as.expression(x)
+		}
+	}
+	if (range.fitness > 4) {
+		breaks.fitness       <- 10^seq(-10, 10, by = 2)
+		breaks.fitness.minor <- 10^seq(-10, 10, by = 1)
+		labels.fitness       <- sapply(breaks.fitness, make.log.labels)
+	} else if (range.fitness > 2) {
+		breaks.fitness       <- 10^c(-10:10)
+		breaks.fitness.minor <- 10^c(-10:10)
+		labels.fitness       <- sapply(breaks.fitness, make.log.labels)
+	} else if (range.fitness > 1) {
+		breaks.fitness       <- c(0.05, 0.1, 0.5, 1, 5, 10, 50)
+		breaks.fitness.minor <- c(0.01*1:9, 0.1*1:9, 1:9, 10*1:9)
+		labels.fitness       <- c(0.05, 0.1, 0.5, 1, 5, 10, 50)
+	} else {
+		breaks.fitness       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
+		breaks.fitness.minor <- c(0.1*1:9, 1:9)
+		labels.fitness       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
+	}
+
+	# Define initial ratio axis: limits, breaks, labels
+	limits.initial.ratio <- range(
+		1e-1, 1e1,  # Minimum range
+		with(data.for.plot.long, 
+			initial.ratio.A[(initial.proportion.A > 0) & (initial.proportion.A < 1)]
+		), 
+		na.rm = TRUE
+	)
+	breaks.initial.ratio <- 10^c(-10:10)
+	if (log10(limits.initial.ratio[2]/limits.initial.ratio[1]) < 3) {
+		breaks.initial.ratio.minor <- 5 * 10^c(-10:10)
+	} else {
+		breaks.initial.ratio.minor <- 10^c(-10:10)
+	}
+	labels.initial.ratio <- sapply(breaks.initial.ratio, make.log.labels)
+	labels.initial.proportion <- sapply(seq(0, 1, by = 0.2), make.linear.labels)
+
+	# Define shared plot elements
+	plot.base <- ggplot() + 
+		scale_fill_manual(values  = c("tan",  "lightsteelblue",  gray(0.65))) + 
+		scale_color_manual(values = c("tan4", "lightsteelblue4", gray(0.1))) + 
+		geom_hline(yintercept = 1, color = "white", size = 0.8) + 
+		ggtitle("") +
+		theme(
+			text                 = element_text(size = 8), 
+			legend.title         = element_blank(), 
+			legend.background    = element_blank(), 
+			legend.direction     = "horizontal", 
+			legend.justification = c(0.5, 0.15), 
+			legend.position      = c(0.5, 1),
+			strip.text           = element_blank(),
+			strip.background     = element_blank()
+		)
+	scale.initial.proportion <- scale_x_continuous(
+		name         = paste("Initial proportion", name.strain.A), 
+		limits       = c(0, 1), 
+		breaks       = seq(0, 1, by = 0.2), 
+		minor_breaks = seq(0, 1, by = 0.1), 
+		labels       = labels.initial.proportion
+	)
+	scale.initial.ratio <- scale_x_log10(
+		name         = bquote("Initial ratio" ~ .(name.strain.A) / .(name.strain.B)), 
+		limits       = limits.initial.ratio, 
+		breaks       = breaks.initial.ratio, 
+		minor_breaks = breaks.initial.ratio.minor,
+		labels       = labels.initial.ratio
+	)
+	scale.fitness <- scale_y_log10(
+		name         = "Wrightian fitness\n (final no. / initial no.)", 
+		limits       = limits.fitness, 
+		breaks       = breaks.fitness,
+		minor_breaks = breaks.fitness.minor, 
+		labels       = labels.fitness
+	)
+	scale.fitness.ratio <- scale_y_log10(
+		name         = bquote("Fitness ratio" ~ .(name.strain.A)/.(name.strain.B)),
+		limits       = limits.fitness.ratio, 
+		breaks       = breaks.fitness,
+		minor_breaks = breaks.fitness.minor, 
+		labels       = labels.fitness
+	)
+
+	# Create individual plots
+	plot.fitness <- plot.base %+% data.for.plot.long + 
+		aes(x = initial.proportion.A) + scale.initial.proportion + 
+		aes(y = fitness) + scale.fitness + 
+		aes(color = strain, fill = strain) + facet_wrap(~ my.facet, nrow = 1) + 
+		geom_point(shape = 21) + geom_point(shape = 1)
+	plot.fitness.logratio <- plot.base %+% data.for.plot.long + 
+		aes(x = initial.ratio.A) + scale.initial.ratio + 
+		aes(y = fitness) + scale.fitness + 
+		aes(color = strain, fill = strain) + facet_wrap(~ my.facet, nrow = 1) + 
+		geom_point(shape = 21) + geom_point(shape = 1)
+	plot.fitness.ratio <-  plot.base %+% data.for.plot.wide + 
+		aes(x = initial.proportion.A) + scale.initial.proportion + 
+		aes(y = fitness.ratio.A) + scale.fitness.ratio + 
+		geom_point(color = gray(0.65)) + geom_point(shape = 1)
+	plot.fitness.ratio.logratio <-  plot.base %+% data.for.plot.wide + 
+		aes(x = initial.ratio.A) + scale.initial.ratio + 
+		aes(y = fitness.ratio.A) + scale.fitness.ratio + 
+		geom_point(color = gray(0.65)) + geom_point(shape = 1)
+
+	# Combine plots
+	pdf(file = NULL)  
+		# workaround so that ggplotGrob() doesn't create a blank plot window
+		# see https://github.com/tidyverse/ggplot2/issues/809
+	plot.proportion <- gtable_add_grob(
+		gtable(widths = unit(rep(1, 25), "null"), heights = unit(rep(1, 1), "null")), 
+		list(ggplotGrob(plot.fitness), ggplotGrob(plot.fitness.ratio)), 
+		l = c(1, 17), r = c(16, 25), t = c(1, 1), b = c(1, 1)
+	)
+	plot.logratio <- gtable_add_grob(
+		gtable(widths = unit(rep(1, 25), "null"), heights = unit(rep(1, 1), "null")), 
+		list(ggplotGrob(plot.fitness.logratio), ggplotGrob(plot.fitness.ratio.logratio)), 
+		l = c(1, 17), r = c(16, 25), t = c(1, 1), b = c(1, 1)
+	)
+	dev.off()  # end of workaround
+
+	# Save plots to pdf
+	ggsave("results-plot1.pdf", plot.proportion, device = "pdf", width = 6.25, height = 2.25)
+	ggsave("results-plot2.pdf", plot.logratio,   device = "pdf", width = 6.25, height = 2.25)
 }
+analyze.mix.expt(data.filename)
+# tmp <- analyze.mix.expt(data.filename)
 
-# Fitness ratio y-axis
-limits.fitness.ratio      <- range(1, my.data$fitness.ratio.A, na.rm = TRUE)
-fitness.ratio.range.log10 <- log10(limits.fitness.ratio[2]/limits.fitness.ratio[1])
-midpoint.fitness.ratio    <- log10(limits.fitness.ratio[1]) + fitness.ratio.range.log10/2
-limits.fitness.ratio[1]   <- 10^(midpoint.fitness.ratio - fitness.range.log10/2) # Use fitness scale
-limits.fitness.ratio[2]   <- 10^(midpoint.fitness.ratio + fitness.range.log10/2) # 
-
-# Initial ratio x-axis
-initial.ratio.limits <- range(
-	1e-1, 1e1,
-	my.data.long$initial.ratio.A[
-		(my.data.long$initial.ratio.A > 0) & !(is.infinite(my.data.long$initial.ratio.A))
-	], 
-	na.rm = TRUE
-)
-initial.ratio.breaks <- 10^c(-8:8)
-initial.ratio.labels <- sapply(
-	initial.ratio.breaks, function(i) as.expression(bquote( 10^ .(log10(i)) ))
-)
-initial.ratio.range.log10 <- log10(initial.ratio.limits[2]/initial.ratio.limits[1])
-if (initial.ratio.range.log10 < 3) {
-	initial.ratio.breaks.minor <- 5 * 10^c(-4:4)
-} else {
-	initial.ratio.breaks.minor <- 10^c(-8:8)
-}
-
-
-
-## 
-## MAKE SHARED PLOT ELEMENTS
-## 
-
-# Make base (empty) plot
-base.plot <- ggplot(data = my.data) + 
-	scale_fill_manual( values = c("tan",  "lightsteelblue", gray(0.65))) + 
-	scale_color_manual(values = c("tan4", "lightsteelblue4", gray(0.1))) + 
-	geom_hline(yintercept = 1, color = "white", size = 1.2) + 
-	theme(
-		text         = element_text(size = 8), 
-		# plot.title   = element_text(hjust = -0.12, vjust = 1, face = "bold"),  # Panel labels
-		# axis.title.x = element_text(vjust = 0),     # More space betweeen axis labels and tick labels
-		# axis.title.y = element_text(vjust = 0.75), 
-		legend.title         = element_blank(), 
-		legend.background    = element_blank(), 
-		legend.direction     = "horizontal", 
-		legend.justification = c(0.5, 0.15), 
-		legend.position      = c(0.5, 1),
-		strip.text           = element_blank(),
-		strip.background     = element_blank()
-	)  
-
-# Make shared axes
-scale.initial.proportion <- scale_x_continuous(
-	name         = paste("Initial proportion", name.strain.A), 
-	limits       = c(0, 1), 
-	breaks       = seq(0, 1, by = 0.2), 
-	minor_breaks = seq(0, 1, by = 0.1)
-)
-scale.initial.ratio <- scale_x_log10(
-	name   = bquote("Initial ratio" ~ .(name.strain.A) / .(name.strain.B)), 
-	limits = initial.ratio.limits, 
-	breaks = initial.ratio.breaks, 
-	minor_breaks = initial.ratio.breaks.minor,
-	labels = initial.ratio.labels
-	# breaks = trans_breaks("log10", function(x) 10^x),
-	# labels = trans_format("log10", math_format(10^.x))
-)
-# scale.initial.ratio.1p <- scale_x_log10(
-	# name   = bquote("Initial ratio" ~ .(name.strain.A) / .(name.strain.B)), 
-	# # limits = initial.ratio.limits, 
-	# breaks = initial.ratio.breaks, 
-	# minor_breaks = initial.ratio.breaks.minor,
-	# labels = initial.ratio.labels
-# )
-scale.fitness <- scale_y_log10(
-	name         = "Fitness\n (final num / initial num)", 
-	limits       = fitness.limits, 
-	breaks       = fitness.breaks,
-	minor_breaks = fitness.breaks.minor, 
-	labels       = fitness.labels
-)
-scale.fitness.ratio <- scale_y_log10(
-	name         = bquote("Fitness ratio" ~ .(name.strain.A)/.(name.strain.B)),
-	limits       = limits.fitness.ratio,
-	breaks       = fitness.breaks, 
-	minor_breaks = fitness.breaks.minor, 
-	labels       = fitness.labels
-)
-
-
-## 
-## MAKE INDIVIDUAL PLOTS
-## 
-
-# Plot fitness
-data.for.plot <- my.data.long
-data.for.plot <- within(data.for.plot, {
-	my.facet <- !(strain %in% c(name.strain.A, name.strain.B))
-})
-plot.fitness <- base.plot %+% data.for.plot + 
-	aes(y = fitness) + scale.fitness + 
-	geom_point(shape = 21) + geom_point(shape = 1) +
-	aes(color = strain, fill = strain) + facet_wrap(~ my.facet, nrow = 1)
-plot.fitness.logit <- plot.fitness +
-	aes(x = initial.ratio.A) + scale.initial.ratio
-# plot.fitness.log1p <- plot.fitness +
-	# aes(x = initial.ratio.1p) + scale.initial.ratio.1p
-plot.fitness <- plot.fitness + 
-	aes(x = initial.proportion.A) + scale.initial.proportion 
-
-# Plot within-group fitness ratio
-plot.fitness.ratio <- base.plot %+% 
-	subset(my.data, (initial.proportion.A > 0) & (initial.proportion.B > 0)) +
-	aes(x = initial.proportion.A, y = fitness.ratio.A) + 
-	geom_point(color = gray(0.65)) + geom_point(shape = 1) + 
-	scale.initial.proportion + scale.fitness.ratio
-plot.fitness.ratio.logit <- base.plot %+% 
-	subset(my.data, (initial.proportion.A > 0) & (initial.proportion.B > 0)) +
-	aes(x = initial.ratio.A, y = fitness.ratio.A) + 
-	geom_point(color = gray(0.65)) + geom_point(shape = 1) + 
-	scale.initial.ratio + scale.fitness.ratio
-# plot.fitness.ratio.log1p <- base.plot %+% 
-	# subset(my.data, (initial.proportion.A > 0) & (initial.proportion.B > 0)) +
-	# aes(x = initial.ratio.1p, y = fitness.ratio.A) + 
-	# geom_point(color = gray(0.5)) + geom_point(shape = 1) + 
-	# scale.initial.ratio.1p + scale.fitness.ratio
-
-
-## 
-## DRAW PAGE OF PLOTS
-##
-
-dev.new(width = 6.5, height = 4.5)
-my.plots <- gtable(widths = unit(rep(1, 3), "null"), heights = unit(rep(1, 2), "null"))
-my.plot.list <- list(
-	ggplotGrob(plot.fitness + ggtitle(" ")), 
-	ggplotGrob(plot.fitness.ratio + ggtitle(" ")), 
-	ggplotGrob(plot.fitness.logit + ggtitle(" ")), 
-	ggplotGrob(plot.fitness.ratio.logit + ggtitle(" "))
-)
-my.plots <- gtable_add_grob(
-	my.plots, my.plot.list, 
-	l = c(1, 3, 1, 3),  # left extents
-	r = c(2, 3, 2, 3),  # right extents
-	t = c(1, 1, 2, 2),  # top extents
-	b = c(1, 1, 2, 2)   # bottom extents
-)
-plot(my.plots)
-
-pdf(file = "results.pdf", width = 6.5, height = 4.5)
-plot(my.plots)
-dev.off()
