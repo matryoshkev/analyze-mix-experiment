@@ -1,40 +1,5 @@
-# analyze-mix-experiment.R v0.4
-# Script for use with the R software environment for statistical computing
+# analyze-mix-experiment.R v0.5
 # jeff smith and R. Fredrick Inglis 2019
-
-# TO DO: 
-# 
-# Open questions
-# - should output include calculated initial and final states?
-# - should plots include zero/Inf data? 
-# 
-# Plots
-# - labels every 3 logs when necessary (esp within) ex: 
-# - breaks = 10^seq(-6, 6, by = 2)
-# - breaks = 10^seq(-3, 3, by = 1)
-# - breaks = c(0.05, 0.1, 0.5, 1, 5, 10, 50)
-# - breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)
-# - axis limits: extend to nearest 10-fold? (initial.ratio, fitness, fitness.ratio)
-# - make.linear.labels on fitness scale 
-# - easily-modified variables for point colors
-# - larger points when multiple zero counts? 
-# 
-# Error warnings: 
-# - negative abundance
-# - number.X > number.total
-# - initial or final proportion not in [0, 1]
-# - zeroes/Inf in outcomes
-# - more than one strain.A or more than one strain.B
-# - stop script execution if warning?
-# 
-# Calculations
-# - format numbers for results-fitness.txt, not formatC()
-# 
-# Code cleanup and streamlining:
-# - revise description and instructions
-# - revise output annotation: script version number? more description? 
-# - include license (GPL-- GNU General Public License?)
-# 
 
 # 
 # WHAT THIS SCRIPT DOES
@@ -48,12 +13,12 @@
 # 
 # 1. Obtain a copy of the R free software environment for statistical computing
 #    from https://www.r-project.org/
-# 2. If you don't already have the ggplot2 or gtable package, run this command in R: 
+# 2. Install the ggplot2 and gtable packages by running this command in R: 
 #    install.packages(c("ggplot2", "gtable"))
 # 3. Format your data to match the script's expected input (described below)
 # 4. Change the filename here to your data: 
 
-	data.filename <- "data-tmp.txt"
+	data.filename <- "your-data-file.txt"
 
 # 5. Run the script in R by selecting "Edit/Source Document" from the top menu (cmd-E in macOS) 
 # 6. Calculated fitness measures will be output to the file "results-fitness.txt". 
@@ -64,7 +29,7 @@
 # 
 # The script expects data to be a tab-delimited text file containing a table with a header row. 
 # An easy way to generate such a file is to copy and paste cells from MS Excel into a text 
-# editor like NotePad or TextEdit. 
+# editor like TextEdit or NotePad. 
 # 
 # Every row must include columns named "strain.A" and "strain.B" that include the names 
 # of the two strains in the mix experiment. Strain A is assumed to be the primary strain of 
@@ -181,18 +146,31 @@ analyze.mix.expt <- function(input.filename) {
 		fitness.total   <- final.number.total / initial.number.total
 		fitness.ratio.A <- fitness.A / fitness.B
 
-		# Format results (scientific notation)
-		# initial.ratio.A <- formatC(initial.ratio.A, format = "e", digits = 6)
-		# fitness.A       <- formatC(fitness.A, format = "e", digits = 6)
-		# fitness.B       <- formatC(fitness.B, format = "e", digits = 6)
-		# fitness.total   <- formatC(fitness.total, format = "e", digits = 6)
-		# fitness.ratio.A <- formatC(fitness.ratio.A, format = "e", digits = 6)
-
 		# NA results for single-strain populations
 		fitness.A[initial.number.A == 0] <- NA
 		fitness.B[initial.number.B == 0] <- NA
 		fitness.ratio.A[(initial.number.A == 0) | (initial.number.B == 0)] <- NA
 
+		# Check: valid population states
+		for (variable in c(
+			"initial.number.A", "initial.number.B", "initial.number.total", 
+			"final.number.A", "final.number.B", "final.number.total"
+		)) {
+			if (any(eval(as.name(variable)) < 0, na.rm = TRUE)) {
+				warning("Negative ", variable, call. = FALSE)
+			}	
+		}
+		if (any((initial.proportion.A < 0) | (initial.proportion.A > 1), na.rm = TRUE)) {
+			warning("Invalid initial.proportion.A", call. = FALSE)
+		}
+		if (any((final.proportion.A < 0) | (final.proportion.A > 1), na.rm = TRUE)) {
+			warning("Invalid final.proportion.A", call. = FALSE)
+		}
+
+		# Caution messages 
+		if (any((fitness.A == 0) | (fitness.B == 0), na.rm = TRUE)) {
+			warning("Caution: fitness zeroes undefined on logarithmic scales", call. = FALSE)
+		}
 	})
 
 	# Add results to input data frame
@@ -316,11 +294,11 @@ analyze.mix.expt <- function(input.filename) {
 	} else if (range.fitness > 1) {
 		breaks.fitness       <- c(0.05, 0.1, 0.5, 1, 5, 10, 50)
 		breaks.fitness.minor <- c(0.01*1:9, 0.1*1:9, 1:9, 10*1:9)
-		labels.fitness       <- c(0.05, 0.1, 0.5, 1, 5, 10, 50)
+		labels.fitness       <- sapply(breaks.fitness, make.linear.labels)
 	} else {
 		breaks.fitness       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
 		breaks.fitness.minor <- c(0.1*1:9, 1:9)
-		labels.fitness       <- c(0.1, 0.2, 0.5, 1, 2, 5, 10)
+		labels.fitness       <- sapply(breaks.fitness, make.linear.labels)
 	}
 
 	# Define initial ratio axis: limits, breaks, labels
@@ -344,6 +322,7 @@ analyze.mix.expt <- function(input.filename) {
 	plot.base <- ggplot() + 
 		scale_fill_manual(values  = c("tan",  "lightsteelblue",  gray(0.65))) + 
 		scale_color_manual(values = c("tan4", "lightsteelblue4", gray(0.1))) + 
+			# colors: focal strain, reference strain, mixed groups
 		geom_hline(yintercept = 1, color = "white", size = 0.8) + 
 		ggtitle("") +
 		theme(
@@ -426,5 +405,4 @@ analyze.mix.expt <- function(input.filename) {
 	ggsave("results-plot2.pdf", plot.logratio,   device = "pdf", width = 6.25, height = 2.25)
 }
 analyze.mix.expt(data.filename)
-# tmp <- analyze.mix.expt(data.filename)
 
